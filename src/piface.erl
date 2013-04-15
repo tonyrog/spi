@@ -1,5 +1,20 @@
+%%%---- BEGIN COPYRIGHT -------------------------------------------------------
+%%%
+%%% Copyright (C) 2007 - 2013, Rogvall Invest AB, <tony@rogvall.se>
+%%%
+%%% This software is licensed as described in the file COPYRIGHT, which
+%%% you should have received as part of this distribution. The terms
+%%% are also available at http://www.rogvall.se/docs/copyright.txt.
+%%%
+%%% You may opt to use, copy, modify, merge, publish, distribute and/or sell
+%%% copies of the Software, and permit persons to whom the Software is
+%%% furnished to do so, under the terms of the COPYRIGHT file.
+%%%
+%%% This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
+%%% KIND, either express or implied.
+%%%
+%%%---- END COPYRIGHT ---------------------------------------------------------
 %%% @author tony <tony@rogvall.se>
-%%% @copyright (C) 2013, tony
 %%% @doc
 %%%    Piface interface
 %%% @end
@@ -72,14 +87,16 @@ init_interrupt() ->
 
 gpio_get(Pin) when ?is_uint8(Pin) ->
     Bits = read_input(),
-    Bits band (Pin bsl 1) =/= 0.
+    Bits band (1 bsl Pin) =/= 0.
  
 -spec gpio_set(Pin::uint8()) -> ok | {error,posix()}.
+
 gpio_set(Pin) when ?is_uint8(Pin) ->
     Bits = read_output(),
     write_output(Bits bor (1 bsl Pin)).
 
 -spec gpio_clr(Pin::uint8()) -> ok | {error,posix()}.
+
 gpio_clr(Pin) when ?is_uint8(Pin) ->
     Bits = read_output(),
     write_output(Bits band (bnot (1 bsl Pin))).
