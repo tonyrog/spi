@@ -1,0 +1,8 @@
+{application, spi,
+ [{description, "SPI device controller"},
+  {vsn, git},
+  {modules, [spi]},
+  {registered, []},
+  {env, []},
+  {applications,[kernel,stdlib]}
+  ]}.
