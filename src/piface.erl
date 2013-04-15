@@ -9,19 +9,22 @@
 
 -export([init/0]).
 -export([gpio_get/1, gpio_set/1, gpio_clr/1]).
+%%
+-export([init_interrupt/0]).
+-export([read_input/0, read_output/0,write_output/1]).
 
 -include("../include/spi.hrl").
 
 -define(SPI_BUS, 0).
 -define(SPI_DEVICE, 0).
 
--define(TRANSFER_LEN, 3).
+-define(TRANSFER_LEN,   3).
 -define(TRANSFER_DELAY, 5).
 -define(TRANSFER_SPEED, 1000000).
--define(TRANSFER_BPW, 8).
+-define(TRANSFER_BPW,   8).
 
--define(SPI_WRITE_CMD, 16#40).
--define(SPI_READ_CMD,  16#41).
+-define(SPI_WRITE_CMD,  16#40).
+-define(SPI_READ_CMD,   16#41).
 
 %% Port configuration
 -define(IODIRA, 16#00).    %% I/O direction A
@@ -40,7 +43,7 @@
 -define(INTCONA,  16#08).
 -define(INTCONB,  16#09).
 
--define(IOCON_HAEN,  2#00001000).
+-define(IOCON_HAEN,   2#00001000).
 -define(IOCON_MIRROR, 2#01000000).
 
 %% set up some ports
@@ -51,12 +54,16 @@
 init() ->
     ok = spi:open(?SPI_BUS, ?SPI_DEVICE),
     spi_write(?IOCON,  ?IOCON_HAEN bor ?IOCON_MIRROR),
-    spi_write(?IODIRA, 0),    %% set port A as outputs
+    spi_write(?IODIRA, 0),     %% set port A as outputs
     spi_write(?IODIRB, 16#FF), %% set port B as inputs
     spi_write(?GPIOA,  16#FF), %% set port A on
-    %% spi:write(ID, ?GPIOB,  0xFF), %% set port B on
+    %% spi_write(?GPIOB,  0xFF), %% set port B on
     spi_write(?GPPUA,  16#FF), %% set port A pullups on
     spi_write(?GPPUB,  16#FF), %% set port B pullups on
+    write_output(16#00),       %% lower all outputs
+    ok.
+
+init_interrupt() ->
     spi_write(?INTCONB,  16#00), %% interrupt on any change
     spi_write(?GPINTENB, 16#FF), %% enable interrupts on B
     ok.
