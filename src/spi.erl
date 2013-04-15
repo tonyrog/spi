@@ -105,7 +105,7 @@ call(Port, Cmd, Data) ->
 	<<1,Y>> -> {ok,Y};
 	<<2,Y:16/native-unsigned>> -> {ok, Y};
 	<<4,Y:32/native-unsigned>> -> {ok, Y};
-	<<3,Data/binary>> -> {ok,Data}
+	<<3,Return/binary>> -> {ok,Return}
     end.
 	     
 

@@ -87,17 +87,24 @@ write_output(Value) ->
     spi_write(?OUTPUT_PORT, Value).
 
 spi_write(Port, Value) ->
-    spi:transfer(?SPI_BUS, ?SPI_DEVICE,
-		 <<?SPI_WRITE_CMD, Port, Value>>,
-		 ?TRANSFER_LEN,
-		 ?TRANSFER_DELAY,
-		 ?TRANSFER_SPEED,
-		 ?TRANSFER_BPW, 0).
+    case spi:transfer(?SPI_BUS, ?SPI_DEVICE,
+		      <<?SPI_WRITE_CMD, Port, Value>>,
+		      ?TRANSFER_LEN,
+		      ?TRANSFER_DELAY,
+		      ?TRANSFER_SPEED,
+		      ?TRANSFER_BPW, 0) of
+	{ok,_Data} -> ok;
+	Error -> Error
+    end.
 
 spi_read(Port) ->
-    spi:transfer(?SPI_BUS, ?SPI_DEVICE,
-		 <<?SPI_READ_CMD, Port, 16#ff>>,
-		 ?TRANSFER_LEN,
-		 ?TRANSFER_DELAY,
-		 ?TRANSFER_SPEED,
-		 ?TRANSFER_BPW, 0).
+    case spi:transfer(?SPI_BUS, ?SPI_DEVICE,
+		      <<?SPI_READ_CMD, Port, 16#ff>>,
+		      ?TRANSFER_LEN,
+		      ?TRANSFER_DELAY,
+		      ?TRANSFER_SPEED,
+		      ?TRANSFER_BPW, 0) of
+	{ok, <<_,_,Bits>>} -> Bits;
+	{ok, _} -> {error,badbits};
+	Error -> Error
+    end.
