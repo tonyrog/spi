@@ -1,8 +1,8 @@
 {application, spi,
  [{description, "SPI device controller"},
   {vsn, git},
-  {modules, [spi]},
-  {registered, []},
+  {mod, {spi_app, []}},
+  {registered, [spi_srv,spi_port]},
   {env, []},
   {applications,[kernel,stdlib]}
   ]}.

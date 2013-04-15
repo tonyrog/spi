@@ -31,21 +31,59 @@ typedef int  ErlDrvSSizeT;
 
 #define INT_EVENT(e) ((int)((long)(e)))
 
+#define CMD_OPEN       1
+#define CMD_CLOSE      2
+#define CMD_TRANSFER   3
+#define CMD_RD_MODE    4
+#define CMD_RD_BPW     5
+#define CMD_RD_SPEED   6
+
+static inline uint32_t get_uint32(uint8_t* ptr)
+{
+    uint32_t value = (ptr[0]<<24) | (ptr[1]<<16) | (ptr[2]<<8) | (ptr[3]<<0);
+    return value;
+}
+
+static inline uint16_t get_uint16(uint8_t* ptr)
+{
+    uint16_t value = (ptr[0]<<8) | (ptr[1]<<0);
+    return value;
+}
+
+static inline uint8_t get_uint8(uint8_t* ptr)
+{
+    uint8_t value = (ptr[0]<<0);
+    return value;
+}
+
+static inline void put_uint16(uint8_t* ptr, uint16_t v)
+{
+    ptr[0] = v>>8;
+    ptr[1] = v;
+}
+
+static inline void put_uint32(uint8_t* ptr, uint32_t v)
+{
+    ptr[0] = v>>24;
+    ptr[1] = v>>16;
+    ptr[2] = v>>8;
+    ptr[3] = v;
+}
+
 typedef struct spi_dev_t
 {
-    struct spidev_t* next;   // when linked
+    struct spi_dev_t* next;   // when linked
     int fd;
-    unsigned int bus;  // bus number
-    unsigned int dev;  // device number
-    int          mode;  // current spi mode
-    int          bits_per_word;  // current bits_per_word
-    int          speed_hz;       // currrent bus speed
+    uint16_t bus;  // bus number
+    uint8_t  chip; // chip number
 } spi_dev_t;
 
+// FIXME?: speed up by makeing first an matrix [BUS][CHIP]
+// when BUS < 8, CHIP < 8?
 typedef struct _spi_ctx_t
 {
     ErlDrvPort port;
-    spi_dev_t* list;
+    spi_dev_t* first;
 } spi_ctx_t;
 
 static int  spi_drv_init(void);
@@ -115,8 +153,32 @@ static void emit_log(int level, char* file, int line, ...)
     }
 }
 
+static spi_dev_t** find_dev(spi_ctx_t* ctx, uint16_t bus, uint8_t  chip) 
+{
+    spi_dev_t** spp = &ctx->first;
+
+    while(*spp) {
+	spi_dev_t* sp = *spp;
+	if ((sp->bus == bus) && (sp->chip == chip))
+	    return spp;
+	spp = &sp->next;
+    }
+    return NULL;
+}
+
+// add new spidev first in list 
+static void add_dev(spi_ctx_t* ctx, uint16_t bus, uint8_t  chip,
+		    spi_dev_t* sp)
+{
+    sp->next = ctx->first;
+    sp->bus = bus;
+    sp->chip = chip;
+    ctx->first = sp;
+}
+
+
 /* general control reply function */
-static ErlDrvSSizeT ctl_reply(int rep, char* buf, ErlDrvSizeT len,
+static ErlDrvSSizeT ctl_reply(int rep, void* buf, ErlDrvSizeT len,
 			      char** rbuf, ErlDrvSizeT rsize)
 {
     char* ptr;
@@ -171,6 +233,7 @@ static ErlDrvData spi_drv_start(ErlDrvPort port, char* command)
 	return ERL_DRV_ERROR_ERRNO;
     }
     ctx->port = port;
+    ctx->first = NULL;
     DEBUGF("spi_drv: start (%s)", command);
 #ifdef PORT_CONTROL_BINARY
     set_port_control_flags(port, PORT_CONTROL_FLAG_BINARY);
@@ -181,19 +244,205 @@ static ErlDrvData spi_drv_start(ErlDrvPort port, char* command)
 static void spi_drv_stop(ErlDrvData d)
 {
     spi_ctx_t* ctx = (spi_ctx_t*) d;
-    // add structure cleanup here
+    spi_dev_t* sp = ctx->first;
+    while(sp) {
+	spi_dev_t* spn = sp->next;
+	driver_select(ctx->port, (ErlDrvEvent) sp->fd, ERL_DRV_USE, 0);
+	driver_free(sp);
+	sp = spn;
+    }
     driver_free(ctx);
 }
 
 static ErlDrvSSizeT spi_drv_ctl(ErlDrvData d, 
-				 unsigned int cmd, char* buf, ErlDrvSizeT len,
+				 unsigned int cmd, char* buf0, ErlDrvSizeT len,
 				 char** rbuf, ErlDrvSizeT rsize)
 {
-//    spi_ctx_t* ctx = (spi_ctx_t*) d;
+    spi_ctx_t* ctx = (spi_ctx_t*) d;
+    uint8_t* buf = (uint8_t*) buf0;
+
     DEBUGF("spi_drv: ctl: cmd=%u, len=%d", 
 	   cmd, len);
+    switch(cmd) {
+    case CMD_OPEN: {
+	spi_dev_t* sp;
+	char path[32];
+	uint16_t bus;
+	uint8_t  chip;
+	int n;
+	int fd;
 
-    return ctl_reply(1, "hello", 5, rbuf, rsize);
+	if (len != 3) goto badarg;
+	bus = get_uint16(buf);
+	chip = get_uint8(buf+2);
+	if (find_dev(ctx, bus, chip) != NULL)
+	    goto ok; // already open
+	n = snprintf(path, sizeof(path), "/dev/spidev%d.%d", bus, chip);
+	if (n >= sizeof(path)) goto badarg;
+	if ((fd = open(path, O_RDWR, 0)) < 0)
+	    goto error;
+	if ((sp = driver_alloc(sizeof(spi_dev_t))) == NULL) {
+	    close(fd);
+	    errno = ENOMEM;
+	    goto error;
+	}
+	add_dev(ctx, bus, chip, sp);
+	sp->fd = fd;
+	goto ok;
+    }
+    
+    case CMD_CLOSE: {
+	spi_dev_t** spp;
+	spi_dev_t* sptr;
+	uint16_t bus;
+	uint8_t  chip;	
+	
+	if (len != 3) goto badarg;
+	bus = get_uint16(buf);
+	chip = get_uint8(buf+2);
+
+	if ((spp = find_dev(ctx, bus, chip)) == NULL)
+	    goto ok;
+	sptr = *spp;
+	driver_select(ctx->port, (ErlDrvEvent)sptr->fd, ERL_DRV_USE, 0);
+	*spp = sptr->next; // unlink
+	driver_free(sptr);
+	goto ok;
+    }
+
+    case CMD_TRANSFER: {
+	spi_dev_t** spp;
+	spi_dev_t* sp;
+	uint16_t   bus;
+	uint8_t    chip;
+	uint32_t   n;
+	int i;
+	struct spi_ioc_transfer transfer_buffer[256];
+	char  rxbuf[1024];
+	char* rxptr;
+	size_t rxlen;
+
+	if (len < 7) goto badarg;
+	bus  = get_uint16(buf);
+	chip = get_uint8(buf+2);
+	if ((spp = find_dev(ctx, bus, chip)) == NULL) {
+	    errno = ENOENT;
+	    goto error;
+	}
+	sp = *spp;
+	n    = get_uint32(buf+3);
+	if (n > 256) goto badarg;  // to many transfers
+	// follow buf+3 
+	// n*
+	//  txsize:32, buflen:32, speed:32, delay:16, bpw:8, cs:8
+	//  txbuf:txsize/binary
+	//
+	buf += 7;
+	len -= 7;
+	rxlen = 0;
+	rxptr = rxbuf;
+	for (i = 0; i < n; i++) {
+	    uint32_t txsize;
+	    uint32_t xlen;
+	    if (len < 16) goto badarg;
+	    txsize = get_uint32(buf);
+	    xlen   = get_uint32(buf+4);
+	    if (txsize < xlen) xlen = txsize;
+	    transfer_buffer[i].tx_buf        = (__u64)((intptr_t)(buf+16));
+	    transfer_buffer[i].rx_buf        = (__u64)((intptr_t)rxptr);
+	    transfer_buffer[i].len           = xlen;
+	    transfer_buffer[i].speed_hz      = get_uint32(buf+8);
+	    transfer_buffer[i].delay_usecs   = get_uint32(buf+12);
+	    transfer_buffer[i].bits_per_word = get_uint8(buf+14);
+	    transfer_buffer[i].cs_change     = get_uint8(buf+15);
+	    buf += 16;
+	    len -= 16;
+	    if (len < txsize) goto badarg;
+	    buf += txsize;
+	    len -= txsize;
+	    rxptr += xlen;
+	    rxlen += xlen;
+	}
+	if (ioctl(sp->fd, SPI_IOC_MESSAGE(n), &transfer_buffer) < n)
+	    goto error;
+	return ctl_reply(3, rxbuf, rxlen, rbuf, rsize);
+    }
+
+    case CMD_RD_MODE: {
+	spi_dev_t** spp;
+	spi_dev_t* sp;
+	uint16_t bus;
+	uint8_t  chip;
+	uint8_t  tmp8;
+
+	if (len != 3) goto badarg;
+	bus = get_uint16(buf);
+	chip = get_uint8(buf+2);
+
+	if ((spp = find_dev(ctx, bus, chip)) == NULL) {
+	    errno = ENOENT;
+	    goto error;
+	}
+	sp = *spp;
+	if (ioctl(sp->fd, SPI_IOC_RD_MODE, &tmp8) < 0)
+	    goto error;
+	return ctl_reply(1, &tmp8, 1, rbuf, rsize);
+    }
+
+    case CMD_RD_BPW: {
+	spi_dev_t** spp;
+	spi_dev_t* sp;
+	uint16_t bus;
+	uint8_t  chip;
+	uint8_t  tmp8;
+
+	if (len != 3) goto badarg;
+	bus = get_uint16(buf);
+	chip = get_uint8(buf+2);
+
+	if ((spp = find_dev(ctx, bus, chip)) == NULL) {
+	    errno = ENOENT;
+	    goto error;
+	}
+	sp = *spp;
+	if (ioctl(sp->fd, SPI_IOC_RD_BITS_PER_WORD, &tmp8) < 0)
+	    goto error;
+	return ctl_reply(1, &tmp8, 1, rbuf, rsize);
+    }
+
+    case CMD_RD_SPEED: {
+	spi_dev_t** spp;
+	spi_dev_t* sp;
+	uint16_t   bus;
+	uint8_t    chip;
+	uint32_t   tmp32;
+
+	if (len != 3) goto badarg;
+	bus = get_uint16(buf);
+	chip = get_uint8(buf+2);
+
+	if ((spp = find_dev(ctx, bus, chip)) == NULL) {
+	    errno = ENOENT;
+	    goto error;
+	}
+	sp = *spp;
+	if (ioctl(sp->fd, SPI_IOC_RD_MAX_SPEED_HZ, &tmp32) < 0)
+	    goto error;
+	return ctl_reply(4, &tmp32, sizeof(tmp32), rbuf, rsize);
+    }
+    default:
+	goto badarg;
+    }
+
+ok:
+    return ctl_reply(0, NULL, 0, rbuf, rsize);
+badarg:
+    errno = EINVAL;
+error:
+    {
+        char* err_str = erl_errno_id(errno);
+	return ctl_reply(255, err_str, strlen(err_str), rbuf, rsize);
+    }
 }
 
 
@@ -258,7 +507,7 @@ DRIVER_INIT(spi_drv)
 {
     ErlDrvEntry* ptr = &spi_drv_entry;
 
-    DEBUGF("spi driver_init");
+    DEBUGF("spi DRIVER_INIT");
 
     ptr->driver_name = "spi_drv";
     ptr->init  = spi_drv_init;
