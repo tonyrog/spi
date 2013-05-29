@@ -13,13 +13,25 @@ can be found [here](https://github.com/erlang/otp/wiki/Installation)
 
 spi is built using rebar that can be found [here](https://github.com/basho/rebar), with building instructions [here](https://github.com/basho/rebar/wiki/Building-rebar).
 
-### Downloading
+### Download
 
 Clone the repository in a suitable location:
 
 ```
 $ git clone git://github.com/tonyrog/spi.git
 ```
+### Build
+
+Rebar will compile all needed dependencies.<br/>
+Compile:
+
+```sh
+$ cd spi
+$ rebar compile
+...
+==> spi (compile)
+```
+
 ### Run
 
 spi is started in a standard erlang fashion:
