@@ -14,24 +14,35 @@
 %%% KIND, either express or implied.
 %%%
 %%%---- END COPYRIGHT ---------------------------------------------------------
-%%% @author tony <tony@rogvall.se>
+%%% @author Tony Rogvall <tony@rogvall.se>
 %%% @doc
-%%%    Linx SPI api
+%%%    Linux SPI api
+%%% Created :  5 Apr 2013 by Tony Rogvall
 %%% @end
-%%% Created :  5 Apr 2013 by tony <tony@rogvall.se>
 
 -module(spi).
 -behaviour(gen_server).
 
+%% api
 -export([open/2]).
 -export([close/2]).
 -export([transfer/3]).
 -export([transfer/8]).
--export([get_mode/2, get_bits_per_word/2, get_speed/2]).
--export([start/0,start_link/0]).
+-export([get_mode/2, 
+	 get_bits_per_word/2, 
+	 get_speed/2]).
 
--export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-	 terminate/2, code_change/3]).
+%% gen_server api
+-export([start/0,
+	 start_link/0]).
+
+%% gen_server callbacks
+-export([init/1, 
+	 handle_call/3, 
+	 handle_cast/2, 
+	 handle_info/2,
+	 terminate/2, 
+	 code_change/3]).
 
 -include("../include/spi.hrl").
 
