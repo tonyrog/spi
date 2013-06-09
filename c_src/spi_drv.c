@@ -119,10 +119,12 @@ static ErlDrvEntry spi_drv_entry;
 #define DLOG_DEFAULT DLOG_NONE
 #endif
 
-#define DLOG(level,file,line,args...) do { \
+#define DLOG(level,file,line,args...) do {				\
 	if (((level) == DLOG_EMERGENCY) ||				\
-	    ((debug_level >= 0) && ((level) <= debug_level))) { \
+	    ((debug_level >= 0) && ((level) <= debug_level))) {		\
+	    int save_errno = errno;					\
 	    emit_log((level),(file),(line),args);			\
+	    errno = save_errno;						\
 	}								\
     } while(0)
 

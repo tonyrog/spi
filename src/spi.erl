@@ -57,8 +57,9 @@ close(Bus, Chip) when ?is_uint16(Bus), ?is_uint8(Chip) ->
 
 transfer(Bus,Chip,L=[#spi_transfer{}|_])
   when ?is_uint16(Bus), ?is_uint8(Chip) ->
-    {N,Data} = encode_spi(L, [], 0),
-    call(?SPI_PORT, ?CMD_TRANSFER, <<Bus:16, Chip:8, N:32, Data>>).
+    {N,Transfers} = encode_spi(L, [], 0),
+    Data = list_to_binary(Transfers),
+    call(?SPI_PORT, ?CMD_TRANSFER, <<Bus:16, Chip:8, N:32, Data/binary>>).
     
 transfer(Bus,Chip,TxData,BufLen,Delay,Speed,BitsPerWord,Cs)
   when ?is_uint16(Bus), ?is_uint8(Chip),
