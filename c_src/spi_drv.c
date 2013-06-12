@@ -37,6 +37,7 @@ typedef int  ErlDrvSSizeT;
 #define CMD_RD_MODE    4
 #define CMD_RD_BPW     5
 #define CMD_RD_SPEED   6
+#define CMD_DEBUG      7
 
 static inline uint32_t get_uint32(uint8_t* ptr)
 {
