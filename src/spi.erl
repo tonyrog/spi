@@ -31,6 +31,7 @@
 -export([get_mode/2, 
 	 get_bits_per_word/2, 
 	 get_speed/2]).
+-export([debug/1]).
 
 %% gen_server api
 -export([start/0,
@@ -55,6 +56,18 @@
 -define(CMD_RD_MODE,   4).
 -define(CMD_RD_BPW,    5).
 -define(CMD_RD_SPEED,  6).
+-define(CMD_DEBUG,     7).
+
+-define(DLOG_DEBUG,     7).
+-define(DLOG_INFO,      6).
+-define(DLOG_NOTICE,    5).
+-define(DLOG_WARNING,   4).
+-define(DLOG_ERROR,     3).
+-define(DLOG_CRITICAL,  2).
+-define(DLOG_ALERT,     1).
+-define(DLOG_EMERGENCY, 0).
+-define(DLOG_NONE,     -1).
+
 
 -define(ENCODE(BufLen,Speed,Delay,BitsPerWord,Cs,TxData),
 	(byte_size(TxData)):32,BufLen:32,Speed:32,Delay:16,
@@ -88,6 +101,24 @@ get_bits_per_word(Bus, Chip) when ?is_uint16(Bus), ?is_uint8(Chip) ->
 
 get_speed(Bus, Chip) when ?is_uint16(Bus), ?is_uint8(Chip) ->
     call(?SPI_PORT, ?CMD_RD_SPEED, <<Bus:16, Chip:8>>).
+
+debug(Level) when is_atom(Level) ->
+    L = level(Level),
+    call(?SPI_PORT, ?CMD_DEBUG, <<L:32>>).
+
+%% convert symbolic to numeric level
+level(true)  -> ?DLOG_DEBUG;
+level(false) -> ?DLOG_NONE;
+level(debug) -> ?DLOG_DEBUG;
+level(info)  -> ?DLOG_INFO;
+level(notice) -> ?DLOG_NOTICE;
+level(warning) -> ?DLOG_WARNING;
+level(error) -> ?DLOG_ERROR;
+level(critical) -> ?DLOG_CRITICAL;
+level(alert) -> ?DLOG_ALERT;
+level(emergency) -> ?DLOG_EMERGENCY;
+level(none) -> ?DLOG_NONE.
+    
 
 encode_spi([#spi_transfer {
 	       tx_buf=TxData, 
