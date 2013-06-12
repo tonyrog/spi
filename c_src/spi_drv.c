@@ -145,12 +145,14 @@ static void emit_log(int level, char* file, int line, ...)
 
     if ((level == DLOG_EMERGENCY) ||
 	((debug_level >= 0) && (level <= debug_level))) {
+	int save_errno = errno;
 	va_start(ap, line);
 	fmt = va_arg(ap, char*);
 	fprintf(stderr, "%s:%d: ", file, line); 
 	vfprintf(stderr, fmt, ap);
 	fprintf(stderr, "\r\n");
 	va_end(ap);
+	errno = save_errno;
     }
 }
 
@@ -431,6 +433,15 @@ static ErlDrvSSizeT spi_drv_ctl(ErlDrvData d,
 	    goto error;
 	return ctl_reply(4, &tmp32, sizeof(tmp32), rbuf, rsize);
     }
+
+    case CMD_DEBUG: {
+	if (len != 4)
+	    goto badarg;
+	debug_level = get_int32(buf);
+	goto ok;
+    }
+
+
     default:
 	goto badarg;
     }
