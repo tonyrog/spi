@@ -280,7 +280,7 @@ static ErlDrvSSizeT spi_drv_ctl(ErlDrvData d,
 	if (find_dev(ctx, bus, chip) != NULL)
 	    goto ok; // already open
 	n = snprintf(path, sizeof(path), "/dev/spidev%d.%d", bus, chip);
-	if (n >= sizeof(path)) goto badarg;
+	if (n >= (int)sizeof(path)) goto badarg;
 	if ((fd = open(path, O_RDWR, 0)) < 0)
 	    goto error;
 	if ((sp = driver_alloc(sizeof(spi_dev_t))) == NULL) {
@@ -343,7 +343,7 @@ static ErlDrvSSizeT spi_drv_ctl(ErlDrvData d,
 	len -= 7;
 	rxlen = 0;
 	rxptr = rxbuf;
-	for (i = 0; i < n; i++) {
+	for (i = 0; i < (int)n; i++) {
 	    uint32_t txsize;
 	    uint32_t xlen;
 	    if (len < 16) goto badarg;
@@ -365,7 +365,7 @@ static ErlDrvSSizeT spi_drv_ctl(ErlDrvData d,
 	    rxptr += xlen;
 	    rxlen += xlen;
 	}
-	if (ioctl(sp->fd, SPI_IOC_MESSAGE(n), &transfer_buffer) < n)
+	if (ioctl(sp->fd, SPI_IOC_MESSAGE(n), &transfer_buffer) < (int)n)
 	    goto error;
 	return ctl_reply(3, rxbuf, rxlen, rbuf, rsize);
     }
