@@ -258,7 +258,7 @@ static void spi_drv_stop(ErlDrvData d)
     spi_dev_t* sp = ctx->first;
     while(sp) {
 	spi_dev_t* spn = sp->next;
-	driver_select(ctx->port, (ErlDrvEvent) sp->fd, ERL_DRV_USE, 0);
+	driver_select(ctx->port, (ErlDrvEvent)((long)sp->fd), ERL_DRV_USE, 0);
 	driver_free(sp);
 	sp = spn;
     }
@@ -315,7 +315,7 @@ static ErlDrvSSizeT spi_drv_ctl(ErlDrvData d,
 	if ((spp = find_dev(ctx, bus, chip)) == NULL)
 	    goto ok;
 	sptr = *spp;
-	driver_select(ctx->port, (ErlDrvEvent)sptr->fd, ERL_DRV_USE, 0);
+	driver_select(ctx->port, (ErlDrvEvent)((long)sptr->fd), ERL_DRV_USE, 0);
 	*spp = sptr->next; // unlink
 	driver_free(sptr);
 	goto ok;
