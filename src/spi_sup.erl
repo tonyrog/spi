@@ -33,7 +33,6 @@
 %% ===================================================================
 
 start_link() ->
-    io:format("spi_sup: start_link\n", []),
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 %% ===================================================================
@@ -42,6 +41,5 @@ start_link() ->
 
 init([]) ->
     SpiServer = ?CHILD(spi, worker),
-    io:format("spi_sup: init [~p]\n", [SpiServer]),
     {ok, { {one_for_one, 5, 10}, [SpiServer]} }.
 

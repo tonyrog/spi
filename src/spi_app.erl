@@ -27,7 +27,6 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
-    io:format("spi_app: start\n", []),
     spi_sup:start_link().
 
 stop(_State) ->

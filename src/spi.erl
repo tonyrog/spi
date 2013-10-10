@@ -162,7 +162,7 @@ start() ->
 
 init([]) ->
     Driver = "spi_drv", 
-    ok = erl_ddll:load_driver(code:priv_dir(spi), Driver),
+    ok = load_driver(code:priv_dir(spi), Driver),
     Port = erlang:open_port({spawn_driver, Driver},[binary]),
     true = erlang:register(?SPI_PORT, Port),
     {ok, #state{ port=Port }}.
@@ -181,3 +181,21 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
+%% can be replaced with dloader later
+load_driver(Path, Name) ->
+    Ext = filename:extension(Name),
+    Base = filename:basename(Name,Ext),
+    NameExt = case os:type() of
+		  {unix,_} ->  Base++".so";
+		  {win32,_} -> Base++".dll"
+	      end,
+    SysPath = filename:join(Path,erlang:system_info(system_architecture)),
+    case filelib:is_regular(filename:join(SysPath,NameExt)) of
+	true -> erl_ddll:load(SysPath, Name);
+	false ->
+	    case filelib:is_regular(filename:join(Path,NameExt)) of
+		true -> erl_ddll:load(Path, Name);
+		false -> {error, enoent}
+	    end
+    end.
