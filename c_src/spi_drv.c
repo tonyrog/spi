@@ -38,6 +38,7 @@ typedef int  ErlDrvSSizeT;
 #define CMD_RD_BPW     5
 #define CMD_RD_SPEED   6
 #define CMD_DEBUG      7
+#define CMD_WR_MODE    8
 
 static inline uint32_t get_uint32(uint8_t* ptr)
 {
@@ -329,9 +330,8 @@ static ErlDrvSSizeT spi_drv_ctl(ErlDrvData d,
 	uint32_t   n;
 	int i;
 	struct spi_ioc_transfer transfer_buffer[256];
-	char  rxbuf[1024];
+	char   rxbuf[4096];  // input buffer
 	char* rxptr;
-	size_t rxlen;
 
 	if (len < 7) goto badarg;
 	bus  = get_uint16(buf);
@@ -350,18 +350,16 @@ static ErlDrvSSizeT spi_drv_ctl(ErlDrvData d,
 	//
 	buf += 7;
 	len -= 7;
-	rxlen = 0;
 	rxptr = rxbuf;
 	for (i = 0; i < (int)n; i++) {
 	    uint32_t txsize;
-	    uint32_t xlen;
+	    // uint32_t rlen;
 	    if (len < 16) goto badarg;
 	    txsize = get_uint32(buf);
-	    xlen   = get_uint32(buf+4);
-	    if (txsize < xlen) xlen = txsize;
+	    // rlen   = get_uint32(buf+4); // not used right now
 	    transfer_buffer[i].tx_buf        = (__u64)((intptr_t)(buf+16));
 	    transfer_buffer[i].rx_buf        = (__u64)((intptr_t)rxptr);
-	    transfer_buffer[i].len           = xlen;
+	    transfer_buffer[i].len           = txsize;
 	    transfer_buffer[i].speed_hz      = get_uint32(buf+8);
 	    transfer_buffer[i].delay_usecs   = get_uint32(buf+12);
 	    transfer_buffer[i].bits_per_word = get_uint8(buf+14);
@@ -369,14 +367,14 @@ static ErlDrvSSizeT spi_drv_ctl(ErlDrvData d,
 	    buf += 16;
 	    len -= 16;
 	    if (len < txsize) goto badarg;
-	    buf += txsize;
-	    len -= txsize;
-	    rxptr += xlen;
-	    rxlen += xlen;
+	    buf   += txsize;
+	    len   -= txsize;
+	    rxptr += txsize;
+	    if ((rxptr - rxbuf) > sizeof(rxbuf))  goto badarg;
 	}
 	if (ioctl(sp->fd, SPI_IOC_MESSAGE(n), &transfer_buffer) < (int)n)
 	    goto error;
-	return ctl_reply(3, rxbuf, rxlen, rbuf, rsize);
+	return ctl_reply(3, rxbuf, rxptr-rxbuf, rbuf, rsize);
     }
 
     case CMD_RD_MODE: {
@@ -398,6 +396,36 @@ static ErlDrvSSizeT spi_drv_ctl(ErlDrvData d,
 	if (ioctl(sp->fd, SPI_IOC_RD_MODE, &tmp8) < 0)
 	    goto error;
 	return ctl_reply(1, &tmp8, 1, rbuf, rsize);
+    }
+
+    case CMD_WR_MODE: {
+	spi_dev_t** spp;
+	spi_dev_t* sp;
+	uint16_t bus;
+	uint8_t  chip;
+	uint8_t  tmp8;
+	uint8_t  mode;
+
+	if (len != 4) goto badarg;
+	bus = get_uint16(buf);
+	chip = get_uint8(buf+2);
+	tmp8 = get_uint8(buf+3);
+
+	if ((spp = find_dev(ctx, bus, chip)) == NULL) {
+	    errno = ENOENT;
+	    goto error;
+	}
+	sp = *spp;
+	switch(tmp8) {
+	case 0: mode = SPI_MODE_0; break;
+	case 1: mode = SPI_MODE_1; break;
+	case 2: mode = SPI_MODE_2; break;
+	case 3: mode = SPI_MODE_3; break;
+	default: goto error;
+	}
+	if (ioctl(sp->fd, SPI_IOC_WR_MODE, &mode) < 0)
+	    goto error;
+	return ctl_reply(0, NULL, 0, rbuf, rsize);
     }
 
     case CMD_RD_BPW: {

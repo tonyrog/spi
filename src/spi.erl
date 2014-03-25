@@ -28,7 +28,7 @@
 -export([close/2]).
 -export([transfer/3]).
 -export([transfer/8]).
--export([get_mode/2, 
+-export([get_mode/2, set_mode/3, 
 	 get_bits_per_word/2, 
 	 get_speed/2]).
 -export([debug/1]).
@@ -57,6 +57,7 @@
 -define(CMD_RD_BPW,    5).
 -define(CMD_RD_SPEED,  6).
 -define(CMD_DEBUG,     7).
+-define(CMD_WR_MODE,   8).
 
 -define(DLOG_DEBUG,     7).
 -define(DLOG_INFO,      6).
@@ -96,6 +97,10 @@ transfer(Bus,Chip,TxData,BufLen,Delay,Speed,BitsPerWord,Cs)
 
 get_mode(Bus, Chip) when ?is_uint16(Bus), ?is_uint8(Chip) ->
     call(?SPI_PORT, ?CMD_RD_MODE, <<Bus:16, Chip:8>>).
+
+set_mode(Bus, Chip, Mode) when ?is_uint16(Bus), ?is_uint8(Chip), 
+			       is_integer(Mode), Mode >= 0, Mode =< 3 ->
+    call(?SPI_PORT, ?CMD_WR_MODE, <<Bus:16, Chip:8, Mode:8>>).
 
 get_bits_per_word(Bus, Chip) when ?is_uint16(Bus), ?is_uint8(Chip) ->
     call(?SPI_PORT, ?CMD_RD_BPW, <<Bus:16, Chip:8>>).
