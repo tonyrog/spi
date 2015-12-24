@@ -354,9 +354,11 @@ static ErlDrvSSizeT spi_drv_ctl(ErlDrvData d,
 	for (i = 0; i < (int)n; i++) {
 	    uint32_t txsize;
 	    // uint32_t rlen;
+	    // DEBUGF("len = %d", len);
 	    if (len < 16) goto badarg;
 	    txsize = get_uint32(buf);
-	    // rlen   = get_uint32(buf+4); // not used right now
+	    memset(&transfer_buffer[i], 0, sizeof(transfer_buffer[i]));
+	    // rlen   = get_uint32(buf+4);
 	    transfer_buffer[i].tx_buf        = (__u64)((intptr_t)(buf+16));
 	    transfer_buffer[i].rx_buf        = (__u64)((intptr_t)rxptr);
 	    transfer_buffer[i].len           = txsize;
@@ -366,13 +368,17 @@ static ErlDrvSSizeT spi_drv_ctl(ErlDrvData d,
 	    transfer_buffer[i].cs_change     = get_uint8(buf+15);
 	    buf += 16;
 	    len -= 16;
+	    // DEBUGF("len = %d, txsize=%d", len,txsize);
 	    if (len < txsize) goto badarg;
 	    buf   += txsize;
 	    len   -= txsize;
 	    rxptr += txsize;
-	    if ((rxptr - rxbuf) > sizeof(rxbuf))  goto badarg;
+	    if ((rxptr - rxbuf) > sizeof(rxbuf)) {
+	      // DEBUGF("rxptr-rxbuf = %d > %d", (rxptr-rxbuf), sizeof(rxbuf));
+	      goto badarg;
+	    }
 	}
-	if (ioctl(sp->fd, SPI_IOC_MESSAGE(n), &transfer_buffer) < (int)n)
+	if (ioctl(sp->fd, SPI_IOC_MESSAGE(n), transfer_buffer) < 0)
 	    goto error;
 	return ctl_reply(3, rxbuf, rxptr-rxbuf, rbuf, rsize);
     }
