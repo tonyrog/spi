@@ -2,6 +2,7 @@
 %%% @copyright (C) 2016, Tony Rogvall
 %%% @doc
 %%%    SPI arduino programmer 
+%%%    Commands from: http://www.atmel.com/images/doc0943.pdf
 %%% @end
 %%% Created : 30 Jun 2016 by Tony Rogvall <tony@rogvall.se>
 
@@ -41,11 +42,35 @@
 -define(STK_READ_PAGE,  16#74).
 -define(STK_READ_SIGN,  16#75).
 
--define(FLASH_READ_LOW,  16#20).
--define(FLASH_READ_HIGH, 16#28).
+-define(EECHUNK, 32).
 
--define(FLASH_WRITE_LOW,  16#40).
--define(FLASH_WRITE_HIGH, 16#48).
+-define(AVR_PROGRAMING_ENABLE,   <<16#AC, 16#53, 16#00, 16#00>>).
+-define(AVR_DEVICE_CODE_VENDOR,  <<16#30, 16#00, 16#00, 16#00>>).
+-define(AVR_DEVICE_CODE_FAMILY,  <<16#30, 16#00, 16#01, 16#00>>).
+-define(AVR_DEVICE_CODE_PART,    <<16#30, 16#00, 16#02, 16#00>>).
+
+-define(DEVICE_AT90S1200, 16#90).
+-define(DEVICE_AT90S2313, 16#91).
+-define(DEVICE_AT90S4414, 16#92).
+-define(DEVICE_AT90S8515, 16#93).
+-define(DEVICE_ERASED,  16#FF).
+-define(DEVICE_LOCKED,  16#02).
+
+-define(AVR_READ_FLASH_LOW(A), <<16#20, (A):16, 16#00>>).
+-define(AVR_READ_FLASH_HIGH(A), <<16#28, (A):16, 16#00>>).
+
+-define(AVR_WRITE_FLASH_LOW(A,D), <<16#60, (A):16, (D)>>).
+-define(AVR_WRITE_FLASH_HIGH(A,D), <<16#68, (A):16, (D)>>).
+
+-define(AVR_READ_EEPROM(A), <<16#A0, (A):16, 16#FF>>).
+-define(AVR_WRITE_EEPROM(A,D), <<16#C0, (A):16, (D)>>).
+
+-define(AVR_SET_LOCK(D), <<16#AC, (D), 16#00, 16#00>>).
+-define(AVR_ERASE_CHIP,  <<16#AC, 16#80, 16#00, 16#00>>).
+
+
+
+
 
 -record(param,
 	{
@@ -190,7 +215,7 @@ start_pmode(Ctx) ->
     timer:sleep(50),
     %% pinMode(MISO, INPUT);
     %% pinMode(MOSI, OUTPUT);
-    spi_send(Ctx,<<16#AC,16#53, 16#00, 16#00>>),
+    spi_send(Ctx,?AVR_PROGRAMING_ENABLE),
     Ctx#ctx { pmode = true }.
 
 end_pmode(Ctx) ->
@@ -210,11 +235,11 @@ read_signature(Ctx) ->
     case uart:recv(Ctx#ctx.uart, 1) of
 	{ok,<<?CRC_EOP>>} ->
 	    uart:send_char(Ctx#ctx.uart, ?STK_INSYNC),
-	    H = spi_send(Ctx, <<16#30, 16#00, 16#00, 16#00>>),
+	    H = spi_send(Ctx, ?AVR_DEVICE_CODE_VENDOR),
 	    uart:send_char(Ctx#ctx.uart, H),
-	    M = spi_send(Ctx, <<16#30, 16#00, 16#01, 16#00>>),
+	    M = spi_send(Ctx, ?AVR_DEVICE_CODE_FAMILY),
 	    uart:send_char(Ctx#ctx.uart, M),
-	    L = spi_send(Ctx, <<16#30, 16#00, 16#02, 16#00>>),
+	    L = spi_send(Ctx, ?AVR_DEVICE_CODE_PART),
 	    uart:send_char(Ctx#ctx.uart, L),
 	    uart:send_char(Ctx#ctx.uart, ?STK_OK);
 	_ ->
@@ -252,10 +277,6 @@ commit(Ctx, Addr) ->
 	    ok
     end.
 
-flash_write(Ctx, Hilo0, Addr, Data) ->
-    Hilo = (Hilo0 bsl 3) + 16#40,
-    spi_send(Ctx, <<Hilo:8, Addr:16, Data:8>>).
-
 write_data(Ctx, Addr, Page, <<>>) ->
     Page = current_page(Ctx, Addr),
     commit(Ctx, Page),
@@ -268,8 +289,8 @@ write_data(Ctx, Addr, Page0, <<LB,HB,Buf>>) ->
 		commit(Ctx, Page0),
 		Page1
 	end,
-    flash_write(Ctx, ?FLASH_WRITE_LOW, Addr, LB),
-    flash_write(Ctx, ?FLASH_WRITE_HIGH, Addr, HB),
+    spi_send(Ctx, ?AVR_WRITE_FLASH_LOW(Addr,LB)),
+    spi_send(Ctx, ?AVR_WRITE_FLASH_HIGH(Addr,HB)), 
     write_data(Ctx, Addr+1, Page, Buf).
 
 write_flash_pages(Ctx, Buf) ->
@@ -295,10 +316,8 @@ write_flash(Ctx, Length) ->
 	    Ctx#ctx { error = Ctx#ctx.error + 1 }
     end.
 
--define(EECHUNK, 32).
-
 write_eeprom_buf(Ctx, Addr, <<B,Buf>>) ->
-    spi_send(Ctx, <<16#C0, Addr:16, B>>),
+    spi_send(Ctx, ?AVR_WRITE_EEPROM(Addr,B)),
     timer:sleep(45),
     write_eeprom_buf(Ctx, Addr+1, Buf);
 write_eeprom_buf(Ctx, _Addr, <<>>) ->
@@ -354,15 +373,12 @@ program_page(Ctx) ->
 	    uart:send_char(Ctx#ctx.uart, ?STK_FAILED)
     end.
 
-flash_read(Ctx, HiLo, Addr) ->
-    spi_send(Ctx, <<HiLo, Addr:16, 0>>).
-
 flash_read_buf(_Ctx, _Addr, I) when I =< 0 ->
     ok;
 flash_read_buf(Ctx, Addr, I) ->
-    L = flash_read(Ctx, ?FLASH_READ_LOW, Addr),
+    L = spi_send(Ctx, ?AVR_READ_FLASH_LOW(Addr)), 
     uart:send_char(Ctx#ctx.uart, L),
-    H = flash_read(Ctx, ?FLASH_READ_HIGH, Addr),
+    H = spi_send(Ctx, ?AVR_READ_FLASH_HIGH(Addr)),
     uart:send_char(Ctx#ctx.uart, H),
     flash_read_buf(Ctx, Addr+1, I-2).
 
@@ -373,7 +389,7 @@ flash_read_page(Ctx, Length) ->
 eeprom_read_buf(_Ctx, _Addr, 0) ->
     ok;
 eeprom_read_buf(Ctx, Addr, Len) ->
-    EE = spi_send(Ctx, <<16#A0, Addr:16, 16#FF>>),
+    EE = spi_send(Ctx, ?AVR_READ_EEPROM(Addr)),
     uart:send_char(Ctx#ctx.uart, EE),
     eeprom_read_buf(Ctx, Addr+1, Len-1).
 
