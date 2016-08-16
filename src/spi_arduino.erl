@@ -508,14 +508,14 @@ avrisp(Cmd, Ctx) ->
 	?STK_READ_SIGN->
 	    read_signature(Ctx);
 	?CRC_EOP ->
-	    uart:send(Ctx#ctx.uart, ?STK_NOSYNC),
+	    uart:send_char(Ctx#ctx.uart, ?STK_NOSYNC),
 	    Ctx#ctx { error = Ctx#ctx.error + 1 };
 	_ ->
 	    case uart:recv(Ctx#ctx.uart, 1) of
 		{ok, <<?CRC_EOP>>} ->
-		    uart:send(Ctx#ctx.uart, ?STK_UNKNOWN);
+		    uart:send_char(Ctx#ctx.uart, ?STK_UNKNOWN);
 		_ ->
-		    uart:send(Ctx#ctx.uart, ?STK_NOSYNC)
+		    uart:send_char(Ctx#ctx.uart, ?STK_NOSYNC)
 	    end,
 	    Ctx#ctx { error = Ctx#ctx.error + 1 }	    
     end.
