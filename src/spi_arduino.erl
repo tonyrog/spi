@@ -231,7 +231,8 @@ start_pmode(Ctx) ->
 
 end_pmode(Ctx) ->
     gpio:input(?RESET),
-    spi:close(Ctx#ctx.bus,Ctx#ctx.chip).
+    spi:close(Ctx#ctx.bus,Ctx#ctx.chip),
+    Ctx.
 
 universal(Ctx) ->
     case uart:recv(Ctx#ctx.uart, 4) of
@@ -252,7 +253,8 @@ read_signature(Ctx) ->
 	    uart:send_char(Ctx#ctx.uart, M),
 	    L = spi_send(Ctx, ?AVR_DEVICE_CODE_PART),
 	    uart:send_char(Ctx#ctx.uart, L),
-	    uart:send_char(Ctx#ctx.uart, ?STK_OK);
+	    uart:send_char(Ctx#ctx.uart, ?STK_OK),
+	    Ctx;
 	_ ->
 	    uart:send_char(Ctx#ctx.uart, ?STK_NOSYNC),
 	    Ctx#ctx { error = Ctx#ctx.error + 1 }
@@ -381,7 +383,8 @@ program_page(Ctx) ->
 		    Ctx#ctx { error = Ctx#ctx.error + 1 }
 	    end;
 	_ ->
-	    uart:send_char(Ctx#ctx.uart, ?STK_FAILED)
+	    uart:send_char(Ctx#ctx.uart, ?STK_FAILED),
+	    Ctx
     end.
 
 flash_read_buf(_Ctx, _Addr, I) when I =< 0 ->
