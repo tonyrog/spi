@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 30 Jun 2016 by Tony Rogvall <tony@rogvall.se>
 
--module(spi_arduion).
+-module(spi_arduino).
 
 -export([start/0, start/1, start/3]).
 -export([init/3]).
