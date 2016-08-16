@@ -16,11 +16,11 @@
 
 -include_lib("spi/include/spi.hrl").
 
--define(RESET,     5). %% SS
+-define(RESET,     25). %% SS
 
--define(LED_HB,    9).
--define(LED_ERR,   8).
--define(LED_PMODE, 7).
+-define(LED_HB,    27).
+-define(LED_ERR,   24).
+-define(LED_PMODE, 27).
 
 -define(HWVER, 2).
 -define(SWMAJ, 1).
@@ -121,17 +121,25 @@ start(Device, Bus, Chip) ->
       end).
 
 init(Device, Bus, Chip) ->
+    application:start(gpio),
     application:start(spi),
     application:start(uart),
     {ok,U} = uart:open(Device, [{baud,19200},
 				{active,false},{mode,binary},
 				{packet,0}]),
+    gpio:init(?RESET),
+    gpio:init(?LED_HB),
+    gpio:init(?LED_ERR),
+    gpio:init(?LED_PMODE),
+    
     gpio:output(?LED_PMODE),
     pulse(?LED_PMODE, 2),
     gpio:output(?LED_ERR),
     pulse(?LED_ERR, 2),
+
     gpio:output(?LED_HB),
     pulse(?LED_HB, 2),
+
     T = erlang:start_timer(16#ffffffff, undefined, undefined),
     #ctx { uart = U, timer = T, bus = Bus, chip = Chip }.
 
