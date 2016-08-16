@@ -16,6 +16,8 @@
 
 -include_lib("spi/include/spi.hrl").
 
+-define(SPI_SPEED, 500000).
+
 -define(RESET,     25). %% SS
 
 -define(LED_HB,    27).
@@ -205,6 +207,7 @@ breply(Ctx, B) ->
 spi_send(Ctx, TxBuf) ->
     T = #spi_transfer { tx_buf = TxBuf,
 			len    = byte_size(TxBuf),
+			speed_hz = ?SPI_SPEED,
 			bits_per_word = 8,
 			delay_usecs   = 0,
 			cs = 0 },
