@@ -180,7 +180,7 @@ pulse(Pin, Times) ->
 
 
 empty_reply(Ctx) ->
-    case uart:read(Ctx#ctx.uart, 1) of
+    case uart:recv(Ctx#ctx.uart, 1) of
 	{ok,<<?CRC_EOP>>} ->
 	    uart:send_char(Ctx#ctx.uart, ?STK_INSYNC),
 	    uart:send_char(Ctx#ctx.uart, ?STK_OK),
@@ -191,7 +191,7 @@ empty_reply(Ctx) ->
     end.
 
 breply(Ctx, B) ->
-    case uart:read(Ctx#ctx.uart, 1) of
+    case uart:recv(Ctx#ctx.uart, 1) of
 	{ok,<<?CRC_EOP>>} ->
 	    uart:send_char(Ctx#ctx.uart, ?STK_INSYNC),
 	    uart:send_char(Ctx#ctx.uart, B),
@@ -429,7 +429,7 @@ avrisp(Cmd, Ctx) ->
 	$0 ->  %% signon
 	    empty_reply(Ctx#ctx { error = 0 });
 	$1 ->
-	    case uart:read(Ctx#ctx.uart, 1) of
+	    case uart:recv(Ctx#ctx.uart, 1) of
 		{ok,<<?CRC_EOP>>} ->
 		    uart:send_char(Ctx#ctx.uart, ?STK_INSYNC),
 		    uart:send(Ctx#ctx.uart, "AVR ISP"),
@@ -439,7 +439,7 @@ avrisp(Cmd, Ctx) ->
 		    Ctx
 	    end;
 	$A ->
-	    case uart:read(Ctx#ctx.uart, 1) of    
+	    case uart:recv(Ctx#ctx.uart, 1) of    
 		{ok, <<16#80>>} ->
 		    breply(Ctx, ?HWVER);
 		{ok, <<16#81>>} ->
