@@ -208,7 +208,7 @@ spi_send(Ctx, TxBuf) ->
 			bits_per_word = 8,
 			delay_usecs   = 0,
 			cs = 0 },
-    {ok,<<_,_,_,R>>} = spi:transfer(Ctx#ctx.bus,Ctx#ctx.chip,T),
+    {ok,<<_,_,_,R>>} = spi:transfer(Ctx#ctx.bus,Ctx#ctx.chip,[T]),
     R.
 
 start_pmode(Ctx) ->
