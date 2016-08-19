@@ -162,7 +162,7 @@ loop(Ctx) ->
 	   true ->
 		Ctx
 	end,
-    case uart:recv(Ctx1#ctx.uart, 1, 1000) of
+    case uart_recv(Ctx1#ctx.uart, 1, 1000) of
 	{ok, <<Cmd>>} ->
 	    Ctx2 = avrisp(Cmd, Ctx1),
 	    loop(Ctx2);
@@ -182,25 +182,25 @@ pulse(Pin, Times) ->
 
 
 empty_reply(Ctx) ->
-    case uart:recv(Ctx#ctx.uart, 1) of
+    case uart_recv(Ctx#ctx.uart, 1) of
 	{ok,<<?CRC_EOP>>} ->
-	    uart:send_char(Ctx#ctx.uart, ?STK_INSYNC),
-	    uart:send_char(Ctx#ctx.uart, ?STK_OK),
+	    uart_send_stk(Ctx#ctx.uart, ?STK_INSYNC),
+	    uart_send_stk(Ctx#ctx.uart, ?STK_OK),
 	    Ctx;
 	_ ->
-	    uart:send_char(Ctx#ctx.uart, ?STK_NOSYNC),
+	    uart_send_stk(Ctx#ctx.uart, ?STK_NOSYNC),
 	    Ctx#ctx { error = Ctx#ctx.error + 1 }
     end.
 
 breply(Ctx, B) ->
-    case uart:recv(Ctx#ctx.uart, 1) of
+    case uart_recv(Ctx#ctx.uart, 1) of
 	{ok,<<?CRC_EOP>>} ->
-	    uart:send_char(Ctx#ctx.uart, ?STK_INSYNC),
-	    uart:send_char(Ctx#ctx.uart, B),
-	    uart:send_char(Ctx#ctx.uart, ?STK_OK),
+	    uart_send_stk(Ctx#ctx.uart, ?STK_INSYNC),
+	    uart_send_char(Ctx#ctx.uart, B),
+	    uart_send_stk(Ctx#ctx.uart, ?STK_OK),
 	    Ctx;
 	_ ->
-	    uart:send_char(Ctx#ctx.uart, ?STK_NOSYNC),
+	    uart_send_stk(Ctx#ctx.uart, ?STK_NOSYNC),
 	    Ctx#ctx { error = Ctx#ctx.error + 1 }
     end.
 
@@ -235,7 +235,7 @@ end_pmode(Ctx) ->
     Ctx.
 
 universal(Ctx) ->
-    case uart:recv(Ctx#ctx.uart, 4) of
+    case uart_recv(Ctx#ctx.uart, 4) of
 	{ok, Buf} ->
 	    R = spi_send(Ctx, Buf),
 	    breply(Ctx, R);
@@ -244,19 +244,19 @@ universal(Ctx) ->
     end.
 
 read_signature(Ctx) ->
-    case uart:recv(Ctx#ctx.uart, 1) of
+    case uart_recv(Ctx#ctx.uart, 1) of
 	{ok,<<?CRC_EOP>>} ->
-	    uart:send_char(Ctx#ctx.uart, ?STK_INSYNC),
+	    uart_send_stk(Ctx#ctx.uart, ?STK_INSYNC),
 	    H = spi_send(Ctx, ?AVR_DEVICE_CODE_VENDOR),
-	    uart:send_char(Ctx#ctx.uart, H),
+	    uart_send_char(Ctx#ctx.uart, H),
 	    M = spi_send(Ctx, ?AVR_DEVICE_CODE_FAMILY),
-	    uart:send_char(Ctx#ctx.uart, M),
+	    uart_send_char(Ctx#ctx.uart, M),
 	    L = spi_send(Ctx, ?AVR_DEVICE_CODE_PART),
-	    uart:send_char(Ctx#ctx.uart, L),
-	    uart:send_char(Ctx#ctx.uart, ?STK_OK),
+	    uart_send_char(Ctx#ctx.uart, L),
+	    uart_send_stk(Ctx#ctx.uart, ?STK_OK),
 	    Ctx;
 	_ ->
-	    uart:send_char(Ctx#ctx.uart, ?STK_NOSYNC),
+	    uart_send_stk(Ctx#ctx.uart, ?STK_NOSYNC),
 	    Ctx#ctx { error = Ctx#ctx.error + 1 }
     end.
 
@@ -312,20 +312,20 @@ write_flash_pages(Ctx, Buf) ->
     {?STK_OK, Ctx1}.
 
 write_flash(Ctx, Length) ->
-    case uart:recv(Ctx#ctx.uart, Length) of
+    case uart_recv(Ctx#ctx.uart, Length) of
 	{ok, Buf} ->
-	    case uart:recv(Ctx#ctx.uart, 1) of
+	    case uart_recv(Ctx#ctx.uart, 1) of
 		{ok, <<?CRC_EOP>>} ->
-		    uart:send_char(Ctx#ctx.uart, ?STK_INSYNC),
+		    uart_send_stk(Ctx#ctx.uart, ?STK_INSYNC),
 		    {R,Ctx1} = write_flash_pages(Ctx, Buf),
-		    uart:send_char(Ctx#ctx.uart, R),
+		    uart_send_char(Ctx#ctx.uart, R),
 		    Ctx1;
 		_ ->
-		    uart:send_char(Ctx#ctx.uart, ?STK_NOSYNC),
+		    uart_send_stk(Ctx#ctx.uart, ?STK_NOSYNC),
 		    Ctx#ctx { error = Ctx#ctx.error + 1 }
 	    end;
 	_ ->
-	    uart:send_char(Ctx#ctx.uart, ?STK_NOSYNC),
+	    uart_send_stk(Ctx#ctx.uart, ?STK_NOSYNC),
 	    Ctx#ctx { error = Ctx#ctx.error + 1 }
     end.
 
@@ -340,7 +340,7 @@ write_eeprom_buf(Ctx, _Addr, <<>>) ->
 write_eeprom_chunk(Ctx, Start, Length) ->
     %% this writes byte-by-byte,
     %% page writing may be faster (4 bytes at a time)
-    {ok, Buf} = uart:recv(Ctx#ctx.uart, Length),
+    {ok, Buf} = uart_recv(Ctx#ctx.uart, Length),
     prog_lamp(Ctx, 0),
     Ctx1 = write_eeprom_buf(Ctx, Start, Buf),
     prog_lamp(Ctx, 1),
@@ -366,24 +366,24 @@ write_eeprom(Ctx, Length) ->
     end.
 
 program_page(Ctx) ->
-    {ok, <<Length:16,MemType>>} = uart:recv(Ctx#ctx.uart, 3),
+    {ok, <<Length:16,MemType>>} = uart_recv(Ctx#ctx.uart, 3),
     %% flash memory @here, (length) bytes
     case MemType of 
 	$F -> 
 	    write_flash(Ctx, Length);
 	$E -> 
 	    R = write_eeprom(Ctx, Length),
-	    case uart:recv(Ctx#ctx.uart, 1) of
+	    case uart_recv(Ctx#ctx.uart, 1) of
 		{ok, <<?CRC_EOP>>} ->
-		    uart:send_char(Ctx#ctx.uart, ?STK_INSYNC),
-		    uart:send_char(Ctx#ctx.uart, R),
+		    uart_send_stk(Ctx#ctx.uart, ?STK_INSYNC),
+		    uart_send_char(Ctx#ctx.uart, R),
 		    Ctx;
 		_ ->
-		    uart:send_char(Ctx#ctx.uart, ?STK_NOSYNC),
+		    uart_send_stk(Ctx#ctx.uart, ?STK_NOSYNC),
 		    Ctx#ctx { error = Ctx#ctx.error + 1 }
 	    end;
 	_ ->
-	    uart:send_char(Ctx#ctx.uart, ?STK_FAILED),
+	    uart_send_stk(Ctx#ctx.uart, ?STK_FAILED),
 	    Ctx
     end.
 
@@ -391,9 +391,9 @@ flash_read_buf(_Ctx, _Addr, I) when I =< 0 ->
     ok;
 flash_read_buf(Ctx, Addr, I) ->
     L = spi_send(Ctx, ?AVR_READ_FLASH_LOW(Addr)), 
-    uart:send_char(Ctx#ctx.uart, L),
+    uart_send_char(Ctx#ctx.uart, L),
     H = spi_send(Ctx, ?AVR_READ_FLASH_HIGH(Addr)),
-    uart:send_char(Ctx#ctx.uart, H),
+    uart_send_char(Ctx#ctx.uart, H),
     flash_read_buf(Ctx, Addr+1, I-2).
 
 flash_read_page(Ctx, Length) ->
@@ -404,7 +404,7 @@ eeprom_read_buf(_Ctx, _Addr, 0) ->
     ok;
 eeprom_read_buf(Ctx, Addr, Len) ->
     EE = spi_send(Ctx, ?AVR_READ_EEPROM(Addr)),
-    uart:send_char(Ctx#ctx.uart, EE),
+    uart_send_char(Ctx#ctx.uart, EE),
     eeprom_read_buf(Ctx, Addr+1, Len-1).
 
 eeprom_read_page(Ctx, Length) ->
@@ -414,38 +414,39 @@ eeprom_read_page(Ctx, Length) ->
 
 
 read_page(Ctx) ->
-    case uart:recv(Ctx#ctx.uart, 3) of
+    case uart_recv(Ctx#ctx.uart, 3) of
 	{ok, <<Length:16, $F, ?CRC_EOP>>} ->
-	    uart:send_char(Ctx#ctx.uart, ?STK_INSYNC),
+	    uart_send_stk(Ctx#ctx.uart, ?STK_INSYNC),
 	    {R,Ctx1} = flash_read_page(Ctx, Length),
-	    uart:send_char(Ctx#ctx.uart, R),
+	    uart_send_char(Ctx#ctx.uart, R),
 	    Ctx1;
 	{ok, <<Length:16, $E, ?CRC_EOP>>} ->
-	    uart:send_char(Ctx#ctx.uart, ?STK_INSYNC),
+	    uart_send_stk(Ctx#ctx.uart, ?STK_INSYNC),
 	    {R,Ctx1} = eeprom_read_page(Ctx, Length),
-	    uart:send_char(Ctx#ctx.uart, R),
+	    uart_send_char(Ctx#ctx.uart, R),
 	    Ctx1;
 	_ ->
-	    uart:send_char(Ctx#ctx.uart, ?STK_NOSYNC),
+	    uart_send_stk(Ctx#ctx.uart, ?STK_NOSYNC),
 	    Ctx#ctx { error = Ctx#ctx.error + 1 }
     end.
 
 avrisp(Cmd, Ctx) ->
+    io:format("command = ~2.16.0b\n", [Cmd]),
     case Cmd of
 	$0 ->  %% signon
 	    empty_reply(Ctx#ctx { error = 0 });
 	$1 ->
-	    case uart:recv(Ctx#ctx.uart, 1) of
+	    case uart_recv(Ctx#ctx.uart, 1) of
 		{ok,<<?CRC_EOP>>} ->
-		    uart:send_char(Ctx#ctx.uart, ?STK_INSYNC),
-		    uart:send(Ctx#ctx.uart, "AVR ISP"),
-		    uart:send_char(Ctx#ctx.uart, ?STK_OK),
+		    uart_send_stk(Ctx#ctx.uart, ?STK_INSYNC),
+		    uart_send(Ctx#ctx.uart, "AVR ISP"),
+		    uart_send_stk(Ctx#ctx.uart, ?STK_OK),
 		    Ctx;
 		_ ->
 		    Ctx
 	    end;
 	$A ->
-	    case uart:recv(Ctx#ctx.uart, 1) of    
+	    case uart_recv(Ctx#ctx.uart, 1) of    
 		{ok, <<16#80>>} ->
 		    breply(Ctx, ?HWVER);
 		{ok, <<16#81>>} ->
@@ -458,7 +459,7 @@ avrisp(Cmd, Ctx) ->
 		    breply(Ctx, 0)
 	    end;
 	$B ->
-	    case uart:recv(Ctx#ctx.uart, 20) of
+	    case uart_recv(Ctx#ctx.uart, 20) of
 		{ok, <<DeviceCode,Revision,ProgType,ParMode,Polling,
 		       SelfTimed,LockBytes,FuseBytes,FlashPoll,
 		       EEPromPoll:16,
@@ -484,7 +485,7 @@ avrisp(Cmd, Ctx) ->
 		    empty_reply(Ctx)
 	    end;
 	$E -> %% extended parameters - ignore for now
-	    case uart:recv(Ctx#ctx.uart, 5) of
+	    case uart_recv(Ctx#ctx.uart, 5) of
 		{ok, _Buf} ->
 		    empty_reply(Ctx);
 		_ ->
@@ -494,13 +495,13 @@ avrisp(Cmd, Ctx) ->
 	    Ctx1 = start_pmode(Ctx),
 	    empty_reply(Ctx1);
 	$U ->
-	    {ok,<<Here:16/little>>} = uart:recv(Ctx#ctx.uart, 2),
+	    {ok,<<Here:16/little>>} = uart_recv(Ctx#ctx.uart, 2),
 	    empty_reply(Ctx#ctx { here = Here });
 	?STK_PROG_FLASH ->
-	    {ok,<<Low,High>>} = uart:recv(Ctx#ctx.uart, 2),
+	    {ok,<<Low,High>>} = uart_recv(Ctx#ctx.uart, 2),
 	    empty_reply(Ctx#ctx { low=Low, high=High });
 	?STK_PROG_DATA ->
-	    {ok,<<Data>>} = uart:recv(Ctx#ctx.uart, 1),
+	    {ok,<<Data>>} = uart_recv(Ctx#ctx.uart, 1),
 	    empty_reply(Ctx#ctx { data=Data });
 	?STK_PROG_PAGE ->
 	    program_page(Ctx);
@@ -514,16 +515,53 @@ avrisp(Cmd, Ctx) ->
 	?STK_READ_SIGN->
 	    read_signature(Ctx);
 	?CRC_EOP ->
-	    uart:send_char(Ctx#ctx.uart, ?STK_NOSYNC),
+	    uart_send_stk(Ctx#ctx.uart, ?STK_NOSYNC),
 	    Ctx#ctx { error = Ctx#ctx.error + 1 };
 	_ ->
-	    case uart:recv(Ctx#ctx.uart, 1) of
+	    case uart_recv(Ctx#ctx.uart, 1) of
 		{ok, <<?CRC_EOP>>} ->
-		    uart:send_char(Ctx#ctx.uart, ?STK_UNKNOWN);
+		    uart_send_stk(Ctx#ctx.uart, ?STK_UNKNOWN);
 		_ ->
-		    uart:send_char(Ctx#ctx.uart, ?STK_NOSYNC)
+		    uart_send_stk(Ctx#ctx.uart, ?STK_NOSYNC)
 	    end,
 	    Ctx#ctx { error = Ctx#ctx.error + 1 }	    
     end.
 
-	
+stk_string(C) ->
+    case C of
+	?STK_OK -> "OK";
+	?STK_FAILED -> "FAILED";
+	?STK_UNKNOWN -> "UNKNOWN";
+	?STK_INSYNC -> "INSYNC";
+	?STK_NOSYNC -> "NOSYNC";
+	?CRC_EOP  -> "EOP";
+	?STK_PROG_FLASH -> "PROG-FLASH";
+	?STK_PROG_DATA  -> "PROG-DATA";
+	?STK_PROG_PAGE -> "PROG-PAGE";
+	?STK_READ_PAGE -> "READ-PAGE";
+	?STK_READ_SIGN -> "READ-SIGN";
+	_ when C >= $!, C =< $~ -> [C];
+	_ -> [$0,$x|erlang:integer_to_list(C, 16)]
+    end.
+
+uart_send_char(U, Char) ->
+    io:format("uart_send_char: ~2.16.0b\n", [Char]),
+    uart:send_char(U, Char).
+
+uart_send_stk(U, Cmd) ->
+    io:format("uart_send_stk: ~s\n", [stk_string(Cmd)]),
+    uart:send_char(U, Cmd).
+
+uart_send(U, Data) ->
+    io:format("uart_send: ~p\n", [Data]),
+    uart:send(U, Data).
+
+uart_recv(U, Len) ->
+    R = uart:recv(U, Len),
+    io:format("uart_recv(~w) ~p\n", [Len,R]),
+    R.
+
+uart_recv(U, Len, Timeout) ->
+    R = uart:recv(U, Len, Timeout),
+    io:format("uart_recv(~w,~w) ~p\n", [Len,Timeout,R]),
+    R.
