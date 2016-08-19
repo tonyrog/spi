@@ -431,7 +431,7 @@ read_page(Ctx) ->
     end.
 
 avrisp(Cmd, Ctx) ->
-    io:format("command = ~2.16.0b\n", [Cmd]),
+    io:format("command = ~s\n", [stk_string(Cmd)]),
     case Cmd of
 	$0 ->  %% signon
 	    empty_reply(Ctx#ctx { error = 0 });
