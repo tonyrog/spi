@@ -98,8 +98,6 @@ static int  spi_drv_init(void);
 static void spi_drv_finish(void);
 static void spi_drv_stop(ErlDrvData);
 static void spi_drv_output(ErlDrvData, char*, ErlDrvSizeT);
-static void spi_drv_event(ErlDrvData d, ErlDrvEvent e,
-			  ErlDrvEventData ed);
 static void spi_drv_ready_input(ErlDrvData, ErlDrvEvent);
 static void spi_drv_ready_output(ErlDrvData data, ErlDrvEvent event);
 static ErlDrvData spi_drv_start(ErlDrvPort, char* command);
@@ -517,16 +515,6 @@ static void spi_drv_outputv(ErlDrvData d, ErlIOVec *ev)
     DEBUGF("spi_drv: outputv");
 }
 
-static void spi_drv_event(ErlDrvData d, ErlDrvEvent e,
-			  ErlDrvEventData ed)
-{
-    (void) d;
-    (void) e;
-    (void) ed;
-    // spi_ctx_t* ctx = (spi_ctx_t*) d;
-    DEBUGF("spi_drv: event called");
-}
-
 static void spi_drv_ready_input(ErlDrvData d, ErlDrvEvent e)
 {
     (void) d;
@@ -563,6 +551,7 @@ DRIVER_INIT(spi_drv)
 
     DEBUGF("spi DRIVER_INIT");
 
+    memset(ptr, 0, sizeof(ErlDrvEvent));
     ptr->driver_name = "spi_drv";
     ptr->init  = spi_drv_init;
     ptr->start = spi_drv_start;
@@ -574,15 +563,10 @@ DRIVER_INIT(spi_drv)
     ptr->control = spi_drv_ctl;
     ptr->timeout = spi_drv_timeout;
     ptr->outputv = spi_drv_outputv;
-    ptr->ready_async = 0;
-    ptr->flush = 0;
-    ptr->call = 0;
-    ptr->event = spi_drv_event;
     ptr->extended_marker = ERL_DRV_EXTENDED_MARKER;
     ptr->major_version = ERL_DRV_EXTENDED_MAJOR_VERSION;
     ptr->minor_version = ERL_DRV_EXTENDED_MINOR_VERSION;
     ptr->driver_flags = ERL_DRV_FLAG_USE_PORT_LOCKING;
-    ptr->process_exit = 0;
     ptr->stop_select = spi_drv_stop_select;
     return ptr;
 }
